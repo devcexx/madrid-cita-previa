@@ -1,0 +1,15 @@
+[package]
+name = "madrid-cita-previa-datagen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+reqwest = { workspace = true }
+scraper = { workspace = true }
+madrid-cita-previa = { path = "../lib" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }

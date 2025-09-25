@@ -1,0 +1,14 @@
+[package]
+name = "madrid-cita-previa-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+scraper = { workspace = true }
+tokio = { workspace = true }
+madrid-cita-previa = { path = "../lib" }
+madrid-cita-previa-data = { path = "../data" }
+reqwest = { workspace = true }
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
