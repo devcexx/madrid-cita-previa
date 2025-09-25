@@ -1,6 +1,5 @@
-mod session;
 mod model;
+mod session;
 
-use serde::{Deserialize, Serialize};
-pub use session::*;
 pub use model::*;
+pub use session::*;

@@ -1,26 +1,29 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use chrono::NaiveDate;
 use lazy_static::lazy_static;
-use log::{debug, info, trace};
-use reqwest::{header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_LENGTH, USER_AGENT}, ClientBuilder, Response, Url};
+use log::{debug, trace};
+use regex::Regex;
+use reqwest::{
+    ClientBuilder, Response, Url,
+    header::{ACCEPT, CONTENT_LENGTH, HeaderMap, HeaderValue, USER_AGENT},
+};
 use scraper::{Html, Selector};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 use tokio::sync::Mutex;
-use regex::Regex;
 
 use crate::{OfficeId, ProcedureId, ProcedureOfficeId};
 
 #[derive(Default)]
 struct SessionState {
-    init: bool
+    init: bool,
 }
 
 pub struct AppointmentSession {
     client: reqwest::Client,
-    state: Arc<Mutex<SessionState>>
+    state: Arc<Mutex<SessionState>>,
 }
 
 lazy_static! {
@@ -50,7 +53,7 @@ pub struct NetOfficeProcedureModel {
     #[serde(rename = "idTramite")]
     pub office_procedure_id: ProcedureOfficeId,
     #[serde(rename = "idFamiliaCita")]
-    pub procedure_id: ProcedureId
+    pub procedure_id: ProcedureId,
 }
 
 #[derive(Deserialize, Debug)]
@@ -74,14 +77,14 @@ pub struct NetOfficeModel {
     #[serde(rename = "urlInformacion")]
     pub url: String,
     #[serde(rename = "tramites")]
-    pub procedures: Vec<NetOfficeProcedureModel>
+    pub procedures: Vec<NetOfficeProcedureModel>,
 }
 
 #[derive(Debug)]
 pub struct NetOfficeBasicInfoModel {
     pub name: String,
     pub group: String,
-    pub id: OfficeId
+    pub id: OfficeId,
 }
 
 #[derive(Deserialize, Debug)]
@@ -91,24 +94,34 @@ pub struct NetAppointment {
     #[serde(rename = "mes")]
     pub month: u8,
     #[serde(rename = "ano")]
-    pub year: u32
+    pub year: u32,
 }
 
 pub struct NetProcedureModel {
-  pub procedure_category: String,
-  pub procedure_name: String,
-  pub procedure_id: ProcedureId
+    pub procedure_category: String,
+    pub procedure_name: String,
+    pub procedure_id: ProcedureId,
 }
 
 impl AppointmentSession {
     pub fn new(cb: ClientBuilder) -> Self {
         let mut headers = HeaderMap::new();
-        headers.append(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0"));
-        let client = cb.cookie_store(true)
+        headers.append(
+            USER_AGENT,
+            HeaderValue::from_static(
+                "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0",
+            ),
+        );
+        let client = cb
+            .cookie_store(true)
             .default_headers(headers)
-            .build().unwrap();
+            .build()
+            .unwrap();
 
-        AppointmentSession { client, state: Arc::new(Mutex::new(SessionState::default())) }
+        AppointmentSession {
+            client,
+            state: Arc::new(Mutex::new(SessionState::default())),
+        }
     }
 
     pub async fn ensure_init(&self) -> anyhow::Result<()> {
@@ -122,28 +135,41 @@ impl AppointmentSession {
     }
 
     async fn init_session(&self) -> anyhow::Result<()> {
-        self.client.get(BASE_URL.clone()).send().await?.error_for_status()?;
+        self.client
+            .get(BASE_URL.clone())
+            .send()
+            .await?
+            .error_for_status()?;
         Ok(())
     }
 
     async fn auth_anonymous(&self) -> anyhow::Result<()> {
-        self.client.post(ENDPOINT_AJAX_AUTH.clone())
+        self.client
+            .post(ENDPOINT_AJAX_AUTH.clone())
             .body("")
             .header(CONTENT_LENGTH, 0) // Must send always the Content-Length and set it to zero.
-            .send().await.with_context(|| format!("POST request to {}", ENDPOINT_AJAX_AUTH.as_str()))?.error_for_status()?;
+            .send()
+            .await
+            .with_context(|| format!("POST request to {}", ENDPOINT_AJAX_AUTH.as_str()))?
+            .error_for_status()?;
         Ok(())
     }
 
-    async fn trace_body_and_error_for_response(operation: &str, resp: Response) -> anyhow::Result<String> {
+    async fn trace_body_and_error_for_response(
+        operation: &str,
+        resp: Response,
+    ) -> anyhow::Result<String> {
         debug!("{} status code: {}", operation, resp.status());
         let body = resp.text().await.context("Reading response body")?;
-
 
         trace!("{} response body: {}", operation, body);
         Ok(body)
     }
 
-    async fn trace_json_body_and_error_for_response<T: for<'de> serde::de::Deserialize<'de>>(operation: &str, resp: Response) -> anyhow::Result<T> {
+    async fn trace_json_body_and_error_for_response<T: for<'de> serde::de::Deserialize<'de>>(
+        operation: &str,
+        resp: Response,
+    ) -> anyhow::Result<T> {
         let body = Self::trace_body_and_error_for_response(operation, resp).await?;
         Ok(serde_json::from_str(&body).context("Parsing response body")?)
     }
@@ -165,90 +191,124 @@ impl AppointmentSession {
         }
     }
 
-    pub async fn get_office_closest_appointment(&self, procedure: ProcedureId) -> anyhow::Result<Option<NetOfficeModel>> {
+    pub async fn get_office_closest_appointment(
+        &self,
+        procedure: ProcedureId,
+    ) -> anyhow::Result<Option<NetOfficeModel>> {
         self.ensure_init().await?;
 
-        let resp = self.client.post(ENDPOINT_CLOSEST_APPOINTMENT_OFFICE.clone())
+        let resp = self
+            .client
+            .post(ENDPOINT_CLOSEST_APPOINTMENT_OFFICE.clone())
             .header(ACCEPT, "application/json")
             .form(&HashMap::from([("idTipoTramite", procedure.0)]))
-            .send().await?;
+            .send()
+            .await?;
 
-        let body =  Self::trace_body_and_error_for_response("get_office_closest_appointment", resp).await?;
+        let body =
+            Self::trace_body_and_error_for_response("get_office_closest_appointment", resp).await?;
         Ok(Self::read_office_optional(&body)?)
     }
 
-    pub async fn get_appointments_for_office(&self, office: OfficeId, procedure_office_id: ProcedureOfficeId) -> anyhow::Result<Vec<NaiveDate>> {
-       self.ensure_init().await?;
+    pub async fn get_appointments_for_office(
+        &self,
+        office: OfficeId,
+        procedure_office_id: ProcedureOfficeId,
+    ) -> anyhow::Result<Vec<NaiveDate>> {
+        self.ensure_init().await?;
 
         let id_office = office.0.to_string();
         let id_procedure = procedure_office_id.0.to_string();
 
         let request = HashMap::from([
             ("valido", "true"),
-                ("ruta", "oficina"),
-                ("idCiudadanoCitaAnterior", ""),
-                ("idOficinaEdicion", ""),
-                ("idServicioEdicion", ""),
-                ("usaVariablesEdicion", ""),
-                ("esModificacion", ""),
-                ("origen", ""),
-                ("idFamiliaCita", ""),
-                ("idOficina", &id_office),
-                ("idServicio", &id_procedure),
-                ("idTipoDocumentoUsuarioAut", ""),
-                ("numeroDocumento", ""),
+            ("ruta", "oficina"),
+            ("idCiudadanoCitaAnterior", ""),
+            ("idOficinaEdicion", ""),
+            ("idServicioEdicion", ""),
+            ("usaVariablesEdicion", ""),
+            ("esModificacion", ""),
+            ("origen", ""),
+            ("idFamiliaCita", ""),
+            ("idOficina", &id_office),
+            ("idServicio", &id_procedure),
+            ("idTipoDocumentoUsuarioAut", ""),
+            ("numeroDocumento", ""),
         ]);
 
-        let resp = self.client.post(ENDPOINT_OFFICE_APPOINTMENTS.clone())
+        let resp = self
+            .client
+            .post(ENDPOINT_OFFICE_APPOINTMENTS.clone())
             .form(&request)
-            .send().await?;
+            .send()
+            .await?;
 
-        let body = Self::trace_body_and_error_for_response("get_appointments_for_office", resp).await?;
-        if body.contains("Las citas disponibles en esta oficina han sido reservadas recientemente") {
+        let body =
+            Self::trace_body_and_error_for_response("get_appointments_for_office", resp).await?;
+        if body.contains("Las citas disponibles en esta oficina han sido reservadas recientemente")
+        {
             return Ok(Vec::new());
         }
 
         if let Some(caps) = RE_AVAILABLE_APPOINTMENTS.captures(&body) {
             let appointments = serde_json::from_str::<Vec<NetAppointment>>(&caps[1])?;
-            return Ok(appointments.into_iter().map(|app| {
-                NaiveDate::from_ymd_opt(app.year as i32, app.month as u32, app.day as u32).unwrap()
-            }).collect())
+            return Ok(appointments
+                .into_iter()
+                .map(|app| {
+                    NaiveDate::from_ymd_opt(app.year as i32, app.month as u32, app.day as u32)
+                        .unwrap()
+                })
+                .collect());
         } else {
             bail!("Response body didn't match expected response for get_appointments_for_office")
-            }
+        }
     }
 
     pub async fn list_available_procedures(&self) -> anyhow::Result<Vec<NetProcedureModel>> {
         self.ensure_init().await?;
 
-        let resp = self.client.get(ENDPOINT_APPOINTMENTS_BY_PROCEDURE_LANDING.clone())
+        let resp = self
+            .client
+            .get(ENDPOINT_APPOINTMENTS_BY_PROCEDURE_LANDING.clone())
             .send()
             .await?;
 
-        let body = Self::trace_body_and_error_for_response("list_available_procedures", resp).await?;
+        let body =
+            Self::trace_body_and_error_for_response("list_available_procedures", resp).await?;
 
         // TODO remove unwraps
         let html = Html::parse_document(&body);
         let select = html.select(&SELECTOR_PROCEDURES_COMBOBOX).next().unwrap();
 
-        Ok(select.select(&SELECTOR_OPTGROUP).flat_map(|optgroup| {
-            let label = optgroup.attr("label").unwrap();
-            debug!("list_available_procedures: Group: {}", label);
-            optgroup.select(&SELECTOR_OPTION).map(|option| {
-                let procedure_name = option.inner_html();
-                let procedure_id = option.attr("value").unwrap();
-                debug!("list_available_procedures:   Procedure: {}; {}", procedure_name, procedure_id);
+        Ok(select
+            .select(&SELECTOR_OPTGROUP)
+            .flat_map(|optgroup| {
+                let label = optgroup.attr("label").unwrap();
+                debug!("list_available_procedures: Group: {}", label);
+                optgroup.select(&SELECTOR_OPTION).map(|option| {
+                    let procedure_name = option.inner_html();
+                    let procedure_id = option.attr("value").unwrap();
+                    debug!(
+                        "list_available_procedures:   Procedure: {}; {}",
+                        procedure_name, procedure_id
+                    );
 
-                NetProcedureModel { procedure_category: label.to_string(), procedure_name, procedure_id: ProcedureId(FromStr::from_str(procedure_id).unwrap()) }
+                    NetProcedureModel {
+                        procedure_category: label.to_string(),
+                        procedure_name,
+                        procedure_id: ProcedureId(FromStr::from_str(procedure_id).unwrap()),
+                    }
+                })
             })
-        }).collect())
+            .collect())
     }
-
 
     pub async fn list_offices(&self) -> anyhow::Result<Vec<NetOfficeBasicInfoModel>> {
         self.ensure_init().await?;
 
-        let resp = self.client.get(ENDPOINT_APPOINTMENTS_BY_OFFICE_LANDING.clone())
+        let resp = self
+            .client
+            .get(ENDPOINT_APPOINTMENTS_BY_OFFICE_LANDING.clone())
             .send()
             .await?;
 
@@ -260,26 +320,35 @@ impl AppointmentSession {
 
         let select = r.select(&SELECTOR_OFFICES_COMBOBOX).next().unwrap();
 
-        Ok(select.select(&SELECTOR_OPTGROUP).flat_map(|optgroup| {
-            let office_category_name = optgroup.attr("label").unwrap();
-            optgroup.select(&SELECTOR_OPTION).map(|option| {
-                let office_name = option.inner_html();
-                let office_id = option.attr("value").unwrap();
-                NetOfficeBasicInfoModel {
-                    name: office_name,
-                    group: office_category_name.to_string(),
-                    id: OfficeId(FromStr::from_str(office_id).unwrap()),
-                }
+        Ok(select
+            .select(&SELECTOR_OPTGROUP)
+            .flat_map(|optgroup| {
+                let office_category_name = optgroup.attr("label").unwrap();
+                optgroup.select(&SELECTOR_OPTION).map(|option| {
+                    let office_name = option.inner_html();
+                    let office_id = option.attr("value").unwrap();
+                    NetOfficeBasicInfoModel {
+                        name: office_name,
+                        group: office_category_name.to_string(),
+                        id: OfficeId(FromStr::from_str(office_id).unwrap()),
+                    }
+                })
             })
-        }).collect())
+            .collect())
     }
 
-
-    pub async fn get_office_details(&self, office_id: OfficeId) -> anyhow::Result<Option<NetOfficeModel>> {
+    pub async fn get_office_details(
+        &self,
+        office_id: OfficeId,
+    ) -> anyhow::Result<Option<NetOfficeModel>> {
         let office_id_str = office_id.0.to_string();
 
-        let resp = self.client.get(ENDPOINT_OFFICE_INFO.clone()).query(&HashMap::from([("idOficina", office_id_str)]))
-            .send().await?;
+        let resp = self
+            .client
+            .get(ENDPOINT_OFFICE_INFO.clone())
+            .query(&HashMap::from([("idOficina", office_id_str)]))
+            .send()
+            .await?;
 
         let body = Self::trace_body_and_error_for_response("get_office_details", resp).await?;
         Ok(Self::read_office_optional(&body)?)

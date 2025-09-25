@@ -1,9 +1,12 @@
-use std::{fs::File, io::Write, path::{Path, PathBuf}, str::FromStr};
+use std::{fs::File, io::Write, path::PathBuf, str::FromStr};
 
-use madrid_cita_previa::{DataGenModel, DataGenOffice, DataGenOfficeProcedure, DataGenProcedure, OfficeId, ProcedureId, ProcedureOfficeId, StaticProcedure};
 use lazy_static::lazy_static;
+use madrid_cita_previa::{
+    DataGenModel, DataGenOffice, DataGenOfficeProcedure, DataGenProcedure, OfficeId, ProcedureId,
+    ProcedureOfficeId,
+};
 use proc_macro2::{Ident, Literal, Span, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{TokenStreamExt, quote};
 use regex::Regex;
 
 lazy_static! {
@@ -52,7 +55,10 @@ fn office_const_name(office: &DataGenOffice) -> String {
 }
 
 fn procedure_const_name(proc: &DataGenProcedure) -> String {
-    format!("PROC_{}", clean_ident_name(&proc.procedure_name.to_uppercase()))
+    format!(
+        "PROC_{}",
+        clean_ident_name(&proc.procedure_name.to_uppercase())
+    )
 }
 
 fn gen_office_procedure(proc: &DataGenOfficeProcedure) -> TokenStream {
@@ -77,9 +83,10 @@ fn gen_office(office: &DataGenOffice) -> TokenStream {
     let office_name_lit = Literal::string(&office.name);
     let office_group_lit = Literal::string(&office.group);
     let office_id = gen_office_id(office.id);
-    let procedures = office.procedures.iter().map(|proc| {
-        gen_office_procedure(proc)
-    });
+    let procedures = office
+        .procedures
+        .iter()
+        .map(|proc| gen_office_procedure(proc));
 
     quote! {
         pub const #office_const: ::madrid_cita_previa::StaticOffice = ::madrid_cita_previa::StaticOffice {
@@ -101,9 +108,7 @@ fn gen_offices_mod(model: &DataGenModel) -> TokenStream {
         }
     });
 
-    let all_gen_offices = model.offices.iter().map(|office| {
-        gen_office(office)
-    });
+    let all_gen_offices = model.offices.iter().map(|office| gen_office(office));
 
     quote! {
         pub mod offices {
@@ -129,8 +134,6 @@ fn gen_procedure(proc: &DataGenProcedure) -> TokenStream {
             procedure_id: #proc_id
         };
     }
-
-
 }
 
 fn gen_procedures_mod(model: &DataGenModel) -> TokenStream {
@@ -141,9 +144,7 @@ fn gen_procedures_mod(model: &DataGenModel) -> TokenStream {
         }
     });
 
-    let all_procs = model.procedures.iter().map(|proc| {
-        gen_procedure(proc)
-    });
+    let all_procs = model.procedures.iter().map(|proc| gen_procedure(proc));
 
     quote! {
         pub mod procedures {
@@ -156,7 +157,8 @@ fn gen_procedures_mod(model: &DataGenModel) -> TokenStream {
 }
 
 fn main() {
-    let datagen_model: DataGenModel = serde_json::from_str(include_str!("../../data/model.json")).unwrap();
+    let datagen_model: DataGenModel =
+        serde_json::from_str(include_str!("../../data/model.json")).unwrap();
 
     let mut tokens = TokenStream::new();
     tokens.append_all(gen_offices_mod(&datagen_model));
@@ -164,8 +166,11 @@ fn main() {
 
     let str = tokens.to_string();
 
-    let out_path = PathBuf::from_str(&std::env::var("OUT_DIR").unwrap()).unwrap().join("gen.rs");
-    File::create(out_path).unwrap()
+    let out_path = PathBuf::from_str(&std::env::var("OUT_DIR").unwrap())
+        .unwrap()
+        .join("gen.rs");
+    File::create(out_path)
+        .unwrap()
         .write_all(&str.as_bytes())
         .unwrap();
 }
