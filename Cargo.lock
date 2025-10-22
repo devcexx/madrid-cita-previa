@@ -972,6 +972,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "chrono-tz",
  "clap",
  "env_logger",
  "log",
@@ -979,6 +980,8 @@ dependencies = [
  "madrid-cita-previa-data",
  "reqwest",
  "scraper",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
