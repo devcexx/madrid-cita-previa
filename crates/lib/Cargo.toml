@@ -13,4 +13,5 @@ tokio = { workspace = true }
 scraper = { workspace = true }
 regex = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 log = { workspace = true }

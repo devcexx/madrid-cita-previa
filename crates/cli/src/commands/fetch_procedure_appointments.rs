@@ -10,11 +10,15 @@ pub struct Args {
     #[arg(short, long)]
     procedure_id: u32,
 
+    /// Fetch also slots for each day found to have appointments.
+    #[arg(short, long)]
+    slots: bool,
+
     /// Search only on this office
     #[arg(short, long)]
     office_id: Option<u32>,
 
-    /// Search only in the offices within the given grooup
+    /// Search only in the offices within the given group
     #[arg(short = 'g', long)]
     office_group: Option<String>,
 }
@@ -68,12 +72,37 @@ pub async fn main(args: Args) -> anyhow::Result<ExitCode> {
         let appointments = session
             .get_appointments_for_office(office.id, procedure.procedure_office_id)
             .await?;
-        if !appointments.is_empty() {
-            found_appointments = true;
-        }
-        println!("{}: {:?}", office.name, appointments);
-    }
 
+        // Sometimes it may happen that get_appointments_for_office reports a
+        // day with appointments, but then no slots are avaiable. For such
+        // reason, setting the found_appointments differently depending on
+        // what data are being asked to get.
+        if args.slots {
+            let mut slots = Vec::new();
+            for appointment_day in appointments.into_iter() {
+                slots.extend(
+                    session
+                        .get_available_appointment_slots_for_office_day(
+                            procedure.procedure_office_id,
+                            appointment_day,
+                        )
+                        .await?,
+                );
+            }
+
+            if !slots.is_empty() {
+                found_appointments = true;
+            }
+
+            println!("{}: {:?}", office.name, slots);
+        } else {
+            if !appointments.is_empty() {
+                found_appointments = true;
+            }
+
+            println!("{}: {:?}", office.name, appointments);
+        }
+    }
     if !found_appointments {
         eprintln!("No appointments found in any of the filtered offices.");
         Ok(ExitCode::RequestUnsatisfied)

@@ -1,4 +1,9 @@
-use std::{fs::File, io::Write, path::PathBuf, str::FromStr};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use lazy_static::lazy_static;
 use madrid_cita_previa::{
@@ -156,9 +161,19 @@ fn gen_procedures_mod(model: &DataGenModel) -> TokenStream {
     }
 }
 
+const MODEL_PATH: &str = "../../data/model.json";
+
 fn main() {
-    let datagen_model: DataGenModel =
-        serde_json::from_str(include_str!("../../data/model.json")).unwrap();
+    println!("cargo::rerun-if-changed={}", MODEL_PATH);
+    let mut model_contents: String = String::new();
+    File::open(MODEL_PATH)
+        .expect(&format!(
+            "Couldn't open model file at {}. Have you ran the datagen script?",
+            MODEL_PATH
+        ))
+        .read_to_string(&mut model_contents)
+        .unwrap();
+    let datagen_model: DataGenModel = serde_json::from_str(&model_contents).unwrap();
 
     let mut tokens = TokenStream::new();
     tokens.append_all(gen_offices_mod(&datagen_model));

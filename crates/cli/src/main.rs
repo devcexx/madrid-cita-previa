@@ -1,10 +1,13 @@
+use std::process::exit;
+
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
+use madrid_cita_previa::NetAppointmentHourlySlots;
 mod commands;
 
 #[derive(Parser)]
 #[command(name = "madrid-cita-previa")]
-#[command(about = "A CLI tool for managing Madrid appointment bookings")]
+#[command(about = "A CLI tool for querying Madrid available procedure appointments")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -21,7 +24,7 @@ enum Commands {
     OfficeInfo(commands::office_info::Args),
     /// Find the office with the closest available appointment
     FetchClosestAppointmentOffice(commands::fetch_closest_appointment_office::Args),
-    /// Find the
+    /// Find the appointments for a given procedure
     FetchProcedureAppointments(commands::fetch_procedure_appointments::Args),
 }
 

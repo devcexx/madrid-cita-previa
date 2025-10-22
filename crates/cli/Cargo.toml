@@ -13,3 +13,4 @@ anyhow = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 clap = { workspace = true }
+chrono = { workspace = true }
