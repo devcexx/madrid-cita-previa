@@ -1,5 +1,4 @@
 use chrono::{DateTime, NaiveDate};
-use clap::builder::Str;
 use madrid_cita_previa::{AppointmentSession, StaticOffice};
 use reqwest::ClientBuilder;
 use serde::Serialize;

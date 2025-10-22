@@ -1,8 +1,6 @@
-use std::process::exit;
 
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use madrid_cita_previa::NetAppointmentHourlySlots;
 mod commands;
 
 #[derive(Parser)]
